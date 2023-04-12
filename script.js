@@ -1,4 +1,4 @@
-'use strict';
+
 /*
     0  1  2 
     3  4  5
@@ -55,50 +55,156 @@ for (var rows = 0, offset = 0; rows < dimension; rows++) {
         boardMatrix[rows][column] = startInfo
     }
 }
-
-boardMatrix[0][0].player = 2
-boardMatrix[0][1].player = 2
-
 class Engine {
   constructor() {
     this.player = 2
     this.oppPlayer = 1
+    this.currentMatrix = boardMatrix
   }
   move() {
-    var avaliableOffsets = this.getAvaliableMoves(boardMatrix)
-    for (var i = 0; i < avaliableOffsets.length; i++) { 
-      const dummyBoard = this.getDummy(avaliableOffsets[i])
-      var winner = checkWin(dummyBoard)
-      if (winner === this.player) {
-        this.makeMove(avaliableOffsets[i])
-      }
-
+    console.clear()
+    var dummyBoard = structuredClone(boardMatrix);
+    // draw
+    var checkDraw = this.getAvaliableMoves(boardMatrix)
+    if (checkDraw.length === 1) {
+      this.makeMove(checkDraw[0])
+      return
     }
 
-  }
+    // get best moves
+    var bestMove = this.getBestMoves(1, undefined, dummyBoard)
 
-  showPlayers(board) {
-    return board.map(function(row) {
-      return row.map(function(section) {
-        return section.player
-      })
-    })
-  }
+    // there could be multiple best moves just get the first one
+    var maxPoints = bestMove.filter(function(points) {
+      if (points.points === Math.max(...bestMove.map(moves => moves.points))) {
+        return true
+      }
+    })[0]
+    console.log(bestMove)
+    this.makeMove(maxPoints.move)
+    return 
 
-  getDummy(offset) {
-    // copy an array without modifying the original
-    // its messy but all the other methods i tried didnt work
-    var dummy = structuredClone(boardMatrix);
+    // if no end games moves were found return random move
+    if (possibleMoves.length === 0) {
+      var moves = this.getAvaliableMoves(dummyBoard)
+      var lengthRanMoves = moves.length
+      return this.makeMove(moves[Math.round(Math.random() * lengthRanMoves)])
+    }
+
+    // find highest points with its offset
+    var highest = 0
+    var offset = undefined
+    for (var i = 0; i < possibleMoves.length; i++) {
+      var moveData = possibleMoves[i]
+      if (moveData.points > highest) highest = moveData.points
+      offset = possibleMoves[i].offset
+    }
+
+    this.makeMove(offset)
+  }
+  getBestMoves(maxDepth, depth = 0, board) {
+      var possibleMoves = []
+
+      var moves = this.getAvaliableMoves(board)
+
+      var enginePoints = 100
+      var playerPoints = -100
+
+      for (let i = 0; i < moves.length; i++) {
+          var newBoard 
+
+          // create dummy board with the added avaliable move
+          // every depth we do the move by the engine and then the player
+          if (depth % 2 === 0) newBoard = this.getDummy(moves[i], board, this.player)
+          else newBoard = this.getDummy(moves[i], board, this.oppPlayer)
+
+          var winner = checkWin(newBoard)
+
+          // if engines win then
+          // 100 - depth
+          // meaning the quicker a path to win will be a better score
+          if (winner === this.player) {
+            possibleMoves.push({
+              move: moves[i],
+              points: enginePoints - depth
+            })
+            continue
+          }
+
+          // if player win then
+          // -100 + depth
+          // meaning the longer a path to win will be a better score
+          if (winner === this.oppPlayer) {
+            possibleMoves.push({
+              move: moves[i],
+              points: playerPoints + depth
+            })
+            continue
+          }
+
+          // if its a draw then 0
+          if (winner === 3) {
+            possibleMoves.push({
+              move: moves[i],
+              points: 0
+            })
+            continue
+          }
+
+          // if theres no winner and another avaliable 
+          // move then get the best moves for that move
+          if (winner === 0) {
+            possibleMoves.push({
+              move: moves[i],
+              points: this.getBestMoves(maxDepth, depth + 1, newBoard)
+            })
+          }
+
+      }
+
+      // for every possible moves
+      // get the best ones
+      for (var i = 0; i < possibleMoves.length; i++) {
+        const data = possibleMoves[i].points
+
+        // it will be an array if there are multiple moves
+        if (Array.isArray(data)) {
+          if (data.length === 0) {
+          } else { 
+            // get the best moves and [0] because there could
+            // be multiple best moves so just get the first one
+            var maxPoints = data.filter(function(points) {
+              if (points.points === Math.min(...data.map(moves => moves.points))) {
+                return true
+              }
+            })[0]
+            // if we find one update the moves that have multiple options
+            // with the best moves
+            if (maxPoints) {
+              possibleMoves[i].points = maxPoints.points
+            }
+          }
+        }
+      }
+
+      return possibleMoves
+  }
+  /*
+  setTimeout(() => {
+    updateBoard(dummyBoard)
+  }, i * 100);
+  */
+  getDummy(offset, board = boardMatrix, player) {
+    var dummy = structuredClone(board);
     for (var x = 0; x < dimension;x++) {
       for (var y = 0; y < dimension;y++) {   
-          if (dummy[x][y].offset === offset) {
-            dummy[x][y].player = this.player
-          }
+        if (dummy[x][y].offset === offset) {
+          dummy[x][y].player = player
+        }
       }
     }
     return dummy
   }
-
   getAvaliableMoves(boardMatrix) {
     var avaliableOffsets = []
     for (var x = 0; x < dimension;x++) {
@@ -111,7 +217,13 @@ class Engine {
     }
     return avaliableOffsets;
   }
-
+  showPlayers(board) {
+    return board.map(function(row) {
+      return row.map(function(section) {
+        return section.player
+      })
+    })
+  }
   makeMove(offset) {
     var data = getInfoByOffset(offset)
 
@@ -132,8 +244,22 @@ function getInfoByOffset(offset) {
         }
     }
 }
-
-function checkWin(arr) {
+function checkDraw(boardMatrix) {
+  var isDraw = true
+  for (var x = 0; x < dimension;x++) {
+    for (var y = 0; y < dimension;y++) {
+        const section = boardMatrix[x][y]      
+        if (section.player === 0) {
+          isDraw = false
+        }
+    }
+  }
+  return isDraw;
+}
+function checkWin(arr, final = false) {
+  if (checkDraw(arr)) {
+    return 3
+  }
   var winMatrix = getWinningCombinations(arr)
   winComb:
   for (var i = 0; i < winMatrix.length; i++) {
@@ -142,9 +268,9 @@ function checkWin(arr) {
       if (winMatrix[i][j].player === 0) continue winComb
       if (winMatrix[i][j].player !== startingValue) continue winComb
     }
-    document.getElementById('winner').innerText = startingValue === 1 ? 'X' : 'O' + ' wins'
+    if (final) document.getElementById('winner').innerText = (startingValue === 1 ? 'X' : 'O') + ' wins'
     return startingValue
-  }
+  } 
   return 0
 }
 
@@ -262,15 +388,15 @@ function addPlayingPiece (mouse, player) {
           mouse.y >= yCordinate && mouse.y <= yCordinate + sectionSize
         ) {
           data.player = player
-          updateBoard()
+      }
     }
   }
-}
-checkWin(boardMatrix)
+  updateBoard()
+  checkWin(boardMatrix)
 }
 
 
-function updateBoard() {
+function updateBoard(bm = boardMatrix) {
   context.clearRect(0, 0, canvas.width, canvas.height);
   drawLines(10, lineColor);
   var xCordinate;
@@ -278,9 +404,9 @@ function updateBoard() {
   var playerGo;
   for (var x = 0;x < dimension;x++) {
     for (var y = 0;y < dimension;y++) {
-      xCordinate = boardMatrix[x][y].x;
-      yCordinate = boardMatrix[x][y].y;
-      playerGo = boardMatrix[x][y].player
+      xCordinate = bm[x][y].x;
+      yCordinate = bm[x][y].y;
+      playerGo = bm[x][y].player
       
         if (playerGo === 1) {
           drawX(xCordinate, yCordinate);
@@ -339,3 +465,15 @@ canvas.addEventListener('mouseup', function (event) {
 });
 updateBoard();
 var engine = new Engine()
+
+/*
+    // another way using ES6 methods
+    offset = possibleMoves.filter(function(data) {
+      if (data.points === Math.max(...possibleMoves.map(bestPoints => bestPoints.points))) {
+        return data.offset
+      }
+    }).map(bestMoves => bestMoves.offset)[0] // [0] because there could multiple best moves so just get the first one
+
+
+    return offset
+    */
