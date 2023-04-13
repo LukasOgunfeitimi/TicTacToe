@@ -23,57 +23,68 @@
     top left bottom right diagonal + 5
     top right bottom left diagonal + 3
 */
-var player = 2;
-var lineColor = "#ddd";
+const player = 1;
+const lineColor = "#ddd";
 
-var canvas = document.getElementById('tic-tac-toe-board');
-var context = canvas.getContext('2d');
+const canvas = document.getElementById('tic-tac-toe-board');
+const context = canvas.getContext('2d');
 
-var dimension = 3
+const dimension = 3
 
-var canvasSize = 1000;
-var sectionSize = canvasSize / dimension
+const canvasSize = 1000;
+const sectionSize = canvasSize / dimension
 ;
 canvas.width = canvasSize;
 canvas.height = canvasSize;
 context.translate(0.5, 0.5);
 
-var boardMatrix = []
-/*
-  * populate matrix and winning combinations
-*/
-for (var rows = 0, offset = 0; rows < dimension; rows++) {
-    boardMatrix[rows] = []
-    for (var column = 0; column < dimension; column++) {
-        var startInfo = {
-            x: 0,
-            y: 0,
-            player: 0,
-            offset: offset++
+class Board {
+  constructor(offset, player, board) {
+    this.offset = offset
+    this.player = player
+    this.board = board ? this.updateBoard(board) : this.newBoard()
+    return this.board
+  }
+  newBoard() {
+    const boardMatrix = []
+    for (var rows = 0, offset = 0; rows < dimension; rows++) {
+      boardMatrix[rows] = []
+      for (var column = 0; column < dimension; column++)
+        boardMatrix[rows][column] = {
+          x: column * sectionSize,
+          y: rows * sectionSize,
+          player: 0,
+          offset: offset++
         }
-        startInfo.x = column * sectionSize
-        startInfo.y = rows * sectionSize
-        boardMatrix[rows][column] = startInfo
     }
+    return boardMatrix
+  }
+  updateBoard(board) {
+    const newBoard = structuredClone(board);
+    for (var x = 0; x < dimension; x++)
+      for (var y = 0; y < dimension; y++)
+        if (newBoard[x][y].offset === this.offset)
+          newBoard[x][y].player = this.player
+    return newBoard
+  }
 }
 
-class Board {
-#
-
 class Engine {
-  constructor() {
-    this.player = 1
-    this.oppPlayer = 2
-    this.currentMatrix = boardMatrix
+  constructor(opposition = 1) {
+    this.player = opposition === 1 ? 2 : 1
+    this.oppPlayer = opposition
   }
-  move() {
-    console.clear()
-    var dummyBoard = structuredClone(boardMatrix);
+  move(board) {
+    // structuredClone will give us a copy of an
+    // array that wont be referenced
+    // so we can make changes to the cloned array
+    // without chaning the original
+    var dummyBoard = structuredClone(board);
+
     // draw
-    var checkDraw = this.getAvaliableMoves(boardMatrix)
+    var checkDraw = this.getAvaliableMoves(board)
     if (checkDraw.length === 1) {
-      this.makeMove(checkDraw[0])
-      return
+      return this.getNewBoard(checkDraw[0], board, this.player)
     }
 
     // get best moves
@@ -85,27 +96,8 @@ class Engine {
         return true
       }
     })[0]
-    console.log(bestMove)
-    this.makeMove(maxPoints.move)
-    return 
 
-    // if no end games moves were found return random move
-    if (possibleMoves.length === 0) {
-      var moves = this.getAvaliableMoves(dummyBoard)
-      var lengthRanMoves = moves.length
-      return this.makeMove(moves[Math.round(Math.random() * lengthRanMoves)])
-    }
-
-    // find highest points with its offset
-    var highest = 0
-    var offset = undefined
-    for (var i = 0; i < possibleMoves.length; i++) {
-      var moveData = possibleMoves[i]
-      if (moveData.points > highest) highest = moveData.points
-      offset = possibleMoves[i].offset
-    }
-
-    this.makeMove(offset)
+    return this.getNewBoard(maxPoints.move, board, this.player)
   }
   getBestMoves(maxDepth, depth = 0, board) {
       var possibleMoves = []
@@ -120,49 +112,44 @@ class Engine {
 
           // create dummy board with the added avaliable move
           // every depth we do the move by the engine and then the player
-          if (depth % 2 === 0) newBoard = this.getDummy(moves[i], board, this.player)
-          else newBoard = this.getDummy(moves[i], board, this.oppPlayer)
+          if (depth % 2 === 0) newBoard = new Board(moves[i], this.player, board)
+          else newBoard = new Board(moves[i], this.oppPlayer, board)
 
-          var winner = checkWin(newBoard)
+          var winner = Canvas.checkWin(newBoard)
 
-          // if engines win then
-          // 100 - depth
-          // meaning the quicker a path to win will be a better score
-          if (winner === this.player) {
-            possibleMoves.push({
-              move: moves[i],
-              points: enginePoints - depth
-            })
-            continue
-          }
-
-          // if player win then
-          // -100 + depth
-          // meaning the longer a path to win will be a better score
-          if (winner === this.oppPlayer) {
-            possibleMoves.push({
-              move: moves[i],
-              points: playerPoints + depth
-            })
-            continue
-          }
-
-          // if its a draw then 0
-          if (winner === 3) {
-            possibleMoves.push({
-              move: moves[i],
-              points: 0
-            })
-            continue
-          }
-
-          // if theres no winner and another avaliable 
-          // move then get the best moves for that move
-          if (winner === 0) {
+          switch (winner) {
+            // if engines win then
+            // 100 - depth
+            // meaning the quicker a path to win will be a better score
+            case this.player:
               possibleMoves.push({
                 move: moves[i],
-                points: this.getBestMoves(maxDepth, depth + 1, newBoard)
+                points: enginePoints - depth
               })
+              break
+            // if player win then
+            // -100 + depth
+            // meaning the longer a path to win will be a better score
+            case this.oppPlayer:
+              possibleMoves.push({
+                move: moves[i],
+                points: playerPoints + depth
+              })
+              break
+            case 3:
+            // if its a draw then 0
+              possibleMoves.push({
+                move: moves[i],
+                points: 0
+              })
+              break
+            case 0:
+            // if theres no winner then get the 
+            // best moves for the that board
+            possibleMoves.push({
+              move: moves[i],
+              points: this.getBestMoves(maxDepth, depth + 1, newBoard)
+            })
           }
       }
 
@@ -170,28 +157,15 @@ class Engine {
       // get the best ones
       for (var i = 0; i < possibleMoves.length; i++) {
         const data = possibleMoves[i].points
-
         // it will be an array if there are multiple moves
         if (Array.isArray(data)) {
-          if (data.length === 0) {
-          } else { 
+          if (data.length !== 0) {
             // get the best moves and [0] because there could
             // be multiple best moves so just get the first one
-            var maxPoints = data.filter(function(points) {
-              if (depth % 2 === 0) {
-                // if we made a move we want the 
-                // worst score for the opponent (Math.min)
-                // which will be the best score for us
-                if (points.points === Math.min(...data.map(moves => moves.points))) {
-                  return true
-                }
-              } else {
-                // if the opponent made a move we want the 
-                // best score for us (Math.max)
-                // which will be the worst score for them
-                if (points.points === Math.max(...data.map(moves => moves.points))) {
-                  return true
-                }
+            const maxPoints = data.filter(function(points) {
+              const minORmax = depth % 2 === 0 ? 'min' : 'max'
+              if (points.points === Math[minORmax](...data.map(moves => moves.points))) {
+                return true
               }
             })[0]
             // if we find one update the moves that have multiple options
@@ -202,37 +176,31 @@ class Engine {
           }
         }
       }
-
       return possibleMoves
   }
-  /*
-  setTimeout(() => {
-    updateBoard(dummyBoard)
-  }, i * 100);
-  */
-  getDummy(offset, board = boardMatrix, player) {
-    var dummy = structuredClone(board);
-    for (var x = 0; x < dimension;x++) {
-      for (var y = 0; y < dimension;y++) {   
-        if (dummy[x][y].offset === offset) {
-          dummy[x][y].player = player
-        }
-      }
-    }
-    return dummy
+  getNewBoard(offset, board = boardMatrix, player) {
+    const newBoard = structuredClone(board);
+    for (var x = 0; x < dimension;x++)
+      for (var y = 0; y < dimension;y++)  
+        if (newBoard[x][y].offset === offset)
+          newBoard[x][y].player = player
+    return newBoard
   }
   getAvaliableMoves(boardMatrix) {
-    var avaliableOffsets = []
+    const avaliableOffsets = []
     for (var x = 0; x < dimension;x++) {
       for (var y = 0; y < dimension;y++) {
-          const section = boardMatrix[x][y]      
-          if (section.player === 0) {
-            avaliableOffsets.push(section.offset)
-          }
+        const section = boardMatrix[x][y]      
+        if (section.player === 0)
+          avaliableOffsets.push(section.offset)
       }
     }
     return avaliableOffsets;
   }
+  
+  // just a helper function showing
+  // the board with only what players pieces
+  // that are played
   showPlayers(board) {
     return board.map(function(row) {
       return row.map(function(section) {
@@ -240,26 +208,161 @@ class Engine {
       })
     })
   }
-  makeMove(offset) {
-    var data = getInfoByOffset(offset)
-
-    // emulate coordinates in the center of the desired section
-    var xC = data.x + (data.x / 2)
-    var yC = data.y + (data.y  / 2)
-    addPlayingPiece({x: xC, y: yC}, this.player)
+  getInfoByOffset(offset) {
+    for (var x = 0; x < dimension;x++)
+      for (var y = 0; y < dimension;y++)   
+        if (boardMatrix[x][y].offset === offset)
+          return boardMatrix[x][y]
   }
 }
 
+class Canvas {
+  constructor(context, board) {
+    this.context = context
+    this.board = board || new Board()
+    this.updateBoard()
 
-function getInfoByOffset(offset) {
-    for (var x = 0; x < dimension;x++) {
-        for (var y = 0; y < dimension;y++) {      
-            if (boardMatrix[x][y].offset === offset) {
-              return boardMatrix[x][y]
-            }
-        }
+    this.engine = new Engine(player)
+
+    canvas.addEventListener('mouseup', (event) => {
+      const canvasMousePosition = this.getCanvasMousePosition(event);
+      this.addPlayingPiece(canvasMousePosition, player);
+
+      this.board = this.engine.move(this.board)
+      this.updateBoard()
+    });
+
+  }
+  updateBoard() {
+    this.context.clearRect(0, 0, canvas.width, canvas.height);
+    
+    this.drawLines(10, lineColor);
+
+    var xCordinate;
+    var yCordinate;
+    var playerGo;
+    for (var x = 0; x < dimension; x++) {
+      for (var y = 0; y < dimension; y++) {
+        xCordinate = this.board[x][y].x;
+        yCordinate = this.board[x][y].y;
+        playerGo = this.board[x][y].player
+
+        if (playerGo === 1)
+          this.drawX(xCordinate, yCordinate);
+
+        if (playerGo === 2)
+          this.drawO(xCordinate, yCordinate)
+      }
     }
+    Canvas.checkWin(this.board, true)
+  }
+  drawLines(lineWidth, strokeStyle) {
+    const lineStart = 4;
+    const lineLength = canvasSize - 5;
+    this.context.lineWidth = lineWidth;
+    this.context.lineCap = 'round';
+    this.context.strokeStyle = strokeStyle;
+    this.context.beginPath();
+  
+    /*
+     * moveTo = line coordinates start position
+     * lineTo = line coordinates end position
+    */
+  
+    /*
+     * Horizontal lines 
+    */
+    for (var y = 1;y < dimension;y++) {  
+      this.context.moveTo(lineStart, y * sectionSize);
+      this.context.lineTo(lineLength, y * sectionSize);
+    }
+  
+    /*
+     * Vertical lines 
+    */
+    for (var x = 1;x < dimension;x++) {
+      this.context.moveTo(x * sectionSize, lineStart);
+      this.context.lineTo(x * sectionSize, lineLength);
+    }
+  
+    this.context.stroke();
+  }
+  addPlayingPiece(mouse, player) {
+    var xCordinate;
+    var yCordinate;
+    for (var x = 0;x < dimension;x++) {
+      for (var y = 0;y < dimension;y++) {
+        var data = this.board[x][y]
+        xCordinate = data.x;
+        yCordinate = data.y;
+
+        // if coords fall into a sector update the player
+        if (
+            mouse.x >= xCordinate && mouse.x <= xCordinate + sectionSize &&
+            mouse.y >= yCordinate && mouse.y <= yCordinate + sectionSize
+          ) {
+            data.player = player
+        }
+      }
+    }
+    this.updateBoard()
+  }
+  drawO (xCordinate, yCordinate) {
+    const halfSectionSize = (0.5 * sectionSize);
+    const centerX = xCordinate + halfSectionSize;
+    const centerY = yCordinate + halfSectionSize;
+    const radius = (sectionSize - 100) / 2;
+    const startAngle = 0 * Math.PI; 
+    const endAngle = 2 * Math.PI;
+  
+    context.lineWidth = 10;
+    context.strokeStyle = "#01bBC2";
+    context.beginPath();
+    context.arc(centerX, centerY, radius, startAngle, endAngle);
+    context.stroke();
+  }
+  drawX (xCordinate, yCordinate) {
+    context.strokeStyle = "#f1be32";
+  
+    context.beginPath();
+    
+    const offset = 50;
+    context.moveTo(xCordinate + offset, yCordinate + offset);
+    context.lineTo(xCordinate + sectionSize - offset, yCordinate + sectionSize - offset);
+  
+    context.moveTo(xCordinate + offset, yCordinate + sectionSize - offset);
+    context.lineTo(xCordinate + sectionSize - offset, yCordinate + offset);
+  
+    context.stroke();
+  }
+  getCanvasMousePosition (event) {
+    var rect = canvas.getBoundingClientRect();
+    return {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top
+    }
+  }
+  static checkWin(arr, final = false) {
+    var winMatrix = getWinningCombinations(arr)
+    winComb:
+    for (var i = 0; i < winMatrix.length; i++) {
+      var startingValue = winMatrix[i][0].player
+      for (var j = 0; j < winMatrix[i].length; j++) {
+        if (winMatrix[i][j].player === 0) continue winComb
+        if (winMatrix[i][j].player !== startingValue) continue winComb
+      }
+      if (final) document.getElementById('winner').innerText = (startingValue === 1 ? 'X' : 'O') + ' wins'
+      return startingValue
+    } 
+    if (checkDraw(arr)) {
+      if (final) document.getElementById('winner').innerText = 'draw'
+      return 3
+    }
+    return 0
+  }
+
 }
+
 function checkDraw(boardMatrix) {
   var isDraw = true
   for (var x = 0; x < dimension;x++) {
@@ -272,24 +375,6 @@ function checkDraw(boardMatrix) {
   }
   return isDraw;
 }
-function checkWin(arr, final = false) {
-  var winMatrix = getWinningCombinations(arr)
-  winComb:
-  for (var i = 0; i < winMatrix.length; i++) {
-    var startingValue = winMatrix[i][0].player
-    for (var j = 0; j < winMatrix[i].length; j++) {
-      if (winMatrix[i][j].player === 0) continue winComb
-      if (winMatrix[i][j].player !== startingValue) continue winComb
-    }
-    if (final) document.getElementById('winner').innerText = (startingValue === 1 ? 'X' : 'O') + ' wins'
-    return startingValue
-  } 
-  if (checkDraw(arr)) {
-    return 3
-  }
-  return 0
-}
-
 
 function getWinningCombinations(matrix) {
     var winningCombinations = []
@@ -355,129 +440,4 @@ function getWinningCombinations(matrix) {
     return winningCombinations
 }
 
-
-function drawLines (lineWidth, strokeStyle) {
-  var lineStart = 4;
-  var lineLength = canvasSize - 5;
-  context.lineWidth = lineWidth;
-  context.lineCap = 'round';
-  context.strokeStyle = strokeStyle;
-  context.beginPath();
-
-  /*
-   * moveTo = start position
-   * lineTo = end position
-   */
-
-  /*
-   * Horizontal lines 
-   */
-  for (var y = 1;y < dimension;y++) {  
-    context.moveTo(lineStart, y * sectionSize);
-    context.lineTo(lineLength, y * sectionSize);
-  }
-
-  /*
-   * Vertical lines 
-   */
-  for (var x = 1;x < dimension;x++) {
-    context.moveTo(x * sectionSize, lineStart);
-    context.lineTo(x * sectionSize, lineLength);
-  }
-
-  context.stroke();
-}
-
-function addPlayingPiece (mouse, player) {
-  var xCordinate;
-  var yCordinate;
-  for (var x = 0;x < dimension;x++) {
-    for (var y = 0;y < dimension;y++) {
-      var data = boardMatrix[x][y]
-      xCordinate = data.x;
-      yCordinate = data.y;
-      /*
-      * if coords fall into a sector
-      */
-      if (
-          mouse.x >= xCordinate && mouse.x <= xCordinate + sectionSize &&
-          mouse.y >= yCordinate && mouse.y <= yCordinate + sectionSize
-        ) {
-          data.player = player
-      }
-    }
-  }
-  updateBoard()
-  checkWin(boardMatrix)
-}
-
-
-function updateBoard(bm = boardMatrix) {
-  context.clearRect(0, 0, canvas.width, canvas.height);
-  drawLines(10, lineColor);
-  var xCordinate;
-  var yCordinate;
-  var playerGo;
-  for (var x = 0;x < dimension;x++) {
-    for (var y = 0;y < dimension;y++) {
-      xCordinate = bm[x][y].x;
-      yCordinate = bm[x][y].y;
-      playerGo = bm[x][y].player
-      
-        if (playerGo === 1) {
-          drawX(xCordinate, yCordinate);
-        } else if (playerGo === 2) {
-          drawO(xCordinate, yCordinate);
-        }
-    }
-  }
-}
-
-function drawO (xCordinate, yCordinate) {
-  var halfSectionSize = (0.5 * sectionSize);
-  var centerX = xCordinate + halfSectionSize;
-  var centerY = yCordinate + halfSectionSize;
-  var radius = (sectionSize - 100) / 2;
-  var startAngle = 0 * Math.PI; 
-  var endAngle = 2 * Math.PI;
-
-  context.lineWidth = 10;
-  context.strokeStyle = "#01bBC2";
-  context.beginPath();
-  context.arc(centerX, centerY, radius, startAngle, endAngle);
-  context.stroke();
-}
-
-function drawX (xCordinate, yCordinate) {
-  context.strokeStyle = "#f1be32";
-
-  context.beginPath();
-  
-  var offset = 50;
-  context.moveTo(xCordinate + offset, yCordinate + offset);
-  context.lineTo(xCordinate + sectionSize - offset, yCordinate + sectionSize - offset);
-
-  context.moveTo(xCordinate + offset, yCordinate + sectionSize - offset);
-  context.lineTo(xCordinate + sectionSize - offset, yCordinate + offset);
-
-  context.stroke();
-}
-
-
-function getCanvasMousePosition (event) {
-  var rect = canvas.getBoundingClientRect();
-  return {
-    x: event.clientX - rect.left,
-    y: event.clientY - rect.top
-  }
-}
-
-canvas.addEventListener('mouseup', function (event) {
-  var canvasMousePosition = getCanvasMousePosition(event);
-  addPlayingPiece(canvasMousePosition, player);
-  engine.move()
-  
-});
-updateBoard();
-var engine = new Engine()
-engine.move()
+new Canvas(context)
