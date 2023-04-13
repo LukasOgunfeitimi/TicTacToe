@@ -23,7 +23,7 @@
     top left bottom right diagonal + 5
     top right bottom left diagonal + 3
 */
-var player = 1;
+var player = 2;
 var lineColor = "#ddd";
 
 var canvas = document.getElementById('tic-tac-toe-board');
@@ -32,7 +32,8 @@ var context = canvas.getContext('2d');
 var dimension = 3
 
 var canvasSize = 1000;
-var sectionSize = canvasSize / dimension;
+var sectionSize = canvasSize / dimension
+;
 canvas.width = canvasSize;
 canvas.height = canvasSize;
 context.translate(0.5, 0.5);
@@ -55,10 +56,14 @@ for (var rows = 0, offset = 0; rows < dimension; rows++) {
         boardMatrix[rows][column] = startInfo
     }
 }
+
+class Board {
+#
+
 class Engine {
   constructor() {
-    this.player = 2
-    this.oppPlayer = 1
+    this.player = 1
+    this.oppPlayer = 2
     this.currentMatrix = boardMatrix
   }
   move() {
@@ -72,7 +77,7 @@ class Engine {
     }
 
     // get best moves
-    var bestMove = this.getBestMoves(1, undefined, dummyBoard)
+    var bestMove = this.getBestMoves(2, undefined, dummyBoard)
 
     // there could be multiple best moves just get the first one
     var maxPoints = bestMove.filter(function(points) {
@@ -154,12 +159,11 @@ class Engine {
           // if theres no winner and another avaliable 
           // move then get the best moves for that move
           if (winner === 0) {
-            possibleMoves.push({
-              move: moves[i],
-              points: this.getBestMoves(maxDepth, depth + 1, newBoard)
-            })
+              possibleMoves.push({
+                move: moves[i],
+                points: this.getBestMoves(maxDepth, depth + 1, newBoard)
+              })
           }
-
       }
 
       // for every possible moves
@@ -174,12 +178,24 @@ class Engine {
             // get the best moves and [0] because there could
             // be multiple best moves so just get the first one
             var maxPoints = data.filter(function(points) {
-              if (points.points === Math.min(...data.map(moves => moves.points))) {
-                return true
+              if (depth % 2 === 0) {
+                // if we made a move we want the 
+                // worst score for the opponent (Math.min)
+                // which will be the best score for us
+                if (points.points === Math.min(...data.map(moves => moves.points))) {
+                  return true
+                }
+              } else {
+                // if the opponent made a move we want the 
+                // best score for us (Math.max)
+                // which will be the worst score for them
+                if (points.points === Math.max(...data.map(moves => moves.points))) {
+                  return true
+                }
               }
             })[0]
             // if we find one update the moves that have multiple options
-            // with the best moves
+            // with the best move
             if (maxPoints) {
               possibleMoves[i].points = maxPoints.points
             }
@@ -257,9 +273,6 @@ function checkDraw(boardMatrix) {
   return isDraw;
 }
 function checkWin(arr, final = false) {
-  if (checkDraw(arr)) {
-    return 3
-  }
   var winMatrix = getWinningCombinations(arr)
   winComb:
   for (var i = 0; i < winMatrix.length; i++) {
@@ -271,6 +284,9 @@ function checkWin(arr, final = false) {
     if (final) document.getElementById('winner').innerText = (startingValue === 1 ? 'X' : 'O') + ' wins'
     return startingValue
   } 
+  if (checkDraw(arr)) {
+    return 3
+  }
   return 0
 }
 
@@ -459,21 +475,9 @@ function getCanvasMousePosition (event) {
 canvas.addEventListener('mouseup', function (event) {
   var canvasMousePosition = getCanvasMousePosition(event);
   addPlayingPiece(canvasMousePosition, player);
-
   engine.move()
   
 });
 updateBoard();
 var engine = new Engine()
-
-/*
-    // another way using ES6 methods
-    offset = possibleMoves.filter(function(data) {
-      if (data.points === Math.max(...possibleMoves.map(bestPoints => bestPoints.points))) {
-        return data.offset
-      }
-    }).map(bestMoves => bestMoves.offset)[0] // [0] because there could multiple best moves so just get the first one
-
-
-    return offset
-    */
+engine.move()
