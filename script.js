@@ -1,4 +1,3 @@
-
 /*
     0  1  2 
     3  4  5
@@ -223,13 +222,15 @@ class Canvas {
     this.updateBoard()
 
     this.engine = new Engine(player)
-
+    // first - 500
     canvas.addEventListener('mouseup', (event) => {
       const canvasMousePosition = this.getCanvasMousePosition(event);
       this.addPlayingPiece(canvasMousePosition, player);
-
+      var x = Date.now()
       this.board = this.engine.move(this.board)
       this.updateBoard()
+      var y = Date.now()
+      document.getElementById('winner').innerText = y - x
     });
 
   }
@@ -380,12 +381,25 @@ function getWinningCombinations(matrix) {
     var winningCombinations = []
     var boardMatrix = matrix
 
+
+    var tempArrH = []
+    for (var i = 0; i < dimension; i++) {
+      tempArrH.push(dimension[i])
+      if (i % dimension === 0) {
+        winningCombinations.push(tempArrH)
+        tempArrH = []
+      }
+    }
+
+
     /*
       * all horizontal 
     */
-    for (var x = 0; x < dimension; x++) {
-        winningCombinations.push(boardMatrix[x])
+    var tempArrH = []
+    for (var x = 0; x < dimension; x *= 3) {
+        tempArrH.push(boardMatrix[x])
     }
+    winningCombinations.push(tempArrH)
 
     /*
       * all vertical
@@ -440,4 +454,30 @@ function getWinningCombinations(matrix) {
     return winningCombinations
 }
 
-new Canvas(context)
+var testboard = []
+
+var winningCombo = []
+
+var tempArrH = []
+
+// get winning combos
+for (var i = 0, colomn = 0, row = 0; i < dimension * dimension; i++) {
+  if (i % 3 === 0) {
+    if (i !== 0) {
+      winningCombo.push(tempArrH)
+      tempArrH = []
+    }
+    row = 0
+    colomn = sectionSize * (i / dimension)
+  }
+  testboard[i] = {
+    x: row++ * sectionSize,
+    y: colomn,
+    player: 0,
+    offset: i
+  }
+  tempArrH.push(testboard[i])
+  if (i === (dimension * dimension) - 1) winningCombo.push(tempArrH)
+}
+console.log(testboard)
+console.log(winningCombo)
