@@ -2,6 +2,14 @@
     0  1  2 
     3  4  5
     6  7  8
+
+    0  1  2  3
+    4  5  6  7
+    8  9 10  11
+    12 13 14 15
+
+    0  1  2  3  4 
+    5  6  7  8  9
     
     2 dimension
     horizental + 1
@@ -22,7 +30,7 @@
     top left bottom right diagonal + 5
     top right bottom left diagonal + 3
 */
-const player = 1;
+var player = 2;
 const lineColor = "#ddd";
 
 const canvas = document.getElementById('tic-tac-toe-board');
@@ -31,40 +39,80 @@ const context = canvas.getContext('2d');
 const dimension = 3
 
 const canvasSize = 1000;
-const sectionSize = canvasSize / dimension
-;
+const sectionSize = canvasSize / dimension;
 canvas.width = canvasSize;
 canvas.height = canvasSize;
 context.translate(0.5, 0.5);
 
+var winningCombo = []
 class Board {
-  constructor(offset, player, board) {
-    this.offset = offset
-    this.player = player
-    this.board = board ? this.updateBoard(board) : this.newBoard()
-    return this.board
+  constructor() {
+    return this.newBoard()
   }
   newBoard() {
-    const boardMatrix = []
-    for (var rows = 0, offset = 0; rows < dimension; rows++) {
-      boardMatrix[rows] = []
-      for (var column = 0; column < dimension; column++)
-        boardMatrix[rows][column] = {
-          x: column * sectionSize,
-          y: rows * sectionSize,
-          player: 0,
-          offset: offset++
+    var testboard = []
+
+    
+    var tempArrH = []
+    
+    var tempArrDTLBR = []
+    var tempArrDTRBL = []
+    // get winning combos
+    for (var i = 0, colomn = 0, row = 0; i < dimension * dimension; i++) {
+    
+      // horizentol
+      // every last section reset coords
+      if (i % dimension === 0) {
+        // and not first section because
+        // because we havent started yet
+        if (i !== 0) {
+          winningCombo.push(tempArrH)
+          tempArrH = []
         }
+        row = 0
+        colomn = sectionSize * (i / dimension)
+      }
+    
+      testboard[i] = {
+        x: row++ * sectionSize,
+        y: colomn,
+        player: 0,
+      }
+    
+      // diagonal
+      // if section is diagonal from tl to br
+      if (i % (dimension + 1) === 0) {
+        tempArrDTLBR.push(i)
+      }
+    
+      if (
+        i !== 0 && // not the first section
+        i % (dimension - 1) === 0 && // diagonal section from tr to bl
+        i !== (dimension * dimension - 1) // not last one
+        ) {
+        tempArrDTRBL.push(i)
+      }
+    
+      // vertical
+      // if section is in the first row 
+      // create array for each colomn for that row
+      if (i < dimension) winningCombo[i] = []
+      // push board in its vertical row accordingly
+      winningCombo[i % dimension].push(i)
+    
+      // push horizontol board
+      tempArrH.push(i)
+      
+      // last indec
+      // push last horizontal row before loop is terminated
+      // push last diagonal rows
+      if (i === (dimension * dimension) - 1) {
+        winningCombo.push(tempArrH)
+        winningCombo.push(tempArrDTRBL)
+        winningCombo.push(tempArrDTLBR)
+      }
     }
-    return boardMatrix
-  }
-  updateBoard(board) {
-    const newBoard = structuredClone(board);
-    for (var x = 0; x < dimension; x++)
-      for (var y = 0; y < dimension; y++)
-        if (newBoard[x][y].offset === this.offset)
-          newBoard[x][y].player = this.player
-    return newBoard
+    return testboard
   }
 }
 
@@ -74,162 +122,123 @@ class Engine {
     this.oppPlayer = opposition
   }
   move(board) {
-    // structuredClone will give us a copy of an
-    // array that wont be referenced
-    // so we can make changes to the cloned array
-    // without chaning the original
-    var dummyBoard = structuredClone(board);
-
-    // draw
-    var checkDraw = this.getAvaliableMoves(board)
-    if (checkDraw.length === 1) {
-      return this.getNewBoard(checkDraw[0], board, this.player)
-    }
-
     // get best moves
-    var bestMove = this.getBestMoves(2, undefined, dummyBoard)
-
-    // there could be multiple best moves just get the first one
+    const bestMove = this.getBestMoves(0, undefined, structuredClone(board))
     var maxPoints = bestMove.filter(function(points) {
       if (points.points === Math.max(...bestMove.map(moves => moves.points))) {
         return true
       }
     })[0]
-
-    return this.getNewBoard(maxPoints.move, board, this.player)
+    return maxPoints.move
   }
   getBestMoves(maxDepth, depth = 0, board) {
-      var possibleMoves = []
+    var possibleMoves = []
 
-      var moves = this.getAvaliableMoves(board)
+    var moves = this.getAvaliableMoves(board)
 
-      var enginePoints = 100
-      var playerPoints = -100
+    var enginePoints = 100
+    var playerPoints = -100
 
-      for (let i = 0; i < moves.length; i++) {
-          var newBoard 
+    for (let i = 0; i < moves.length; i++) {
+        var newBoard = structuredClone(board)
+        // create dummy board with the added avaliable move
+        // every depth we do the move by the engine and then the player
+        if (depth % 2 === 0) newBoard[moves[i]].player = this.player
+        else newBoard[moves[i]].player = this.oppPlayer
 
-          // create dummy board with the added avaliable move
-          // every depth we do the move by the engine and then the player
-          if (depth % 2 === 0) newBoard = new Board(moves[i], this.player, board)
-          else newBoard = new Board(moves[i], this.oppPlayer, board)
+        var winner = Canvas.checkWin(newBoard)
 
-          var winner = Canvas.checkWin(newBoard)
-
-          switch (winner) {
-            // if engines win then
-            // 100 - depth
-            // meaning the quicker a path to win will be a better score
-            case this.player:
-              possibleMoves.push({
-                move: moves[i],
-                points: enginePoints - depth
-              })
-              break
-            // if player win then
-            // -100 + depth
-            // meaning the longer a path to win will be a better score
-            case this.oppPlayer:
-              possibleMoves.push({
-                move: moves[i],
-                points: playerPoints + depth
-              })
-              break
-            case 3:
-            // if its a draw then 0
-              possibleMoves.push({
-                move: moves[i],
-                points: 0
-              })
-              break
-            case 0:
-            // if theres no winner then get the 
-            // best moves for the that board
+        switch (winner) {
+          // if engines win then
+          // 100 - depth
+          // meaning the quicker a path to win will be a better score
+          case this.player:
             possibleMoves.push({
               move: moves[i],
-              points: this.getBestMoves(maxDepth, depth + 1, newBoard)
+              points: enginePoints - depth
             })
-          }
-      }
+            break
+          // if player win then
+          // -100 + depth
+          // meaning the longer a path to win will be a better score
+          case this.oppPlayer:
+            possibleMoves.push({
+              move: moves[i],
+              points: playerPoints + depth
+            })
+            break
+          case 3:
+          // if its a draw then 0
+            possibleMoves.push({
+              move: moves[i],
+              points: 0
+            })
+            break
+          case 0:
+          // if theres no winner then get the 
+          // best moves for the that board
+            possibleMoves.push({
+              move: moves[i],
+              points: this.getBestMoves(maxDepth, depth + 1, structuredClone(newBoard))
+            })
+            break
+        }
+    }
 
-      // for every possible moves
-      // get the best ones
-      for (var i = 0; i < possibleMoves.length; i++) {
-        const data = possibleMoves[i].points
-        // it will be an array if there are multiple moves
-        if (Array.isArray(data)) {
-          if (data.length !== 0) {
-            // get the best moves and [0] because there could
-            // be multiple best moves so just get the first one
-            const maxPoints = data.filter(function(points) {
-              const minORmax = depth % 2 === 0 ? 'min' : 'max'
-              if (points.points === Math[minORmax](...data.map(moves => moves.points))) {
-                return true
-              }
-            })[0]
-            // if we find one update the moves that have multiple options
-            // with the best move
-            if (maxPoints) {
-              possibleMoves[i].points = maxPoints.points
+    // for every possible moves
+    // get the best ones
+    for (var i = 0; i < possibleMoves.length; i++) {
+      const data = possibleMoves[i].points
+      // it will be an array if there are multiple moves
+      if (Array.isArray(data)) {
+        if (data.length !== 0) {
+          // get the best moves and [0] because there could
+          // be multiple best moves so just get the first one
+          const maxPoints = data.filter(function(points) {
+            const minORmax = depth % 2 === 0 ? 'min' : 'max'
+            if (points.points === Math[minORmax](...data.map(moves => moves.points))) {
+              return true
             }
+          })[0]
+          // if we find one update the moves that have multiple options
+          // with the best move
+          if (maxPoints) {
+            possibleMoves[i].points = maxPoints.points
           }
         }
       }
-      return possibleMoves
-  }
-  getNewBoard(offset, board = boardMatrix, player) {
-    const newBoard = structuredClone(board);
-    for (var x = 0; x < dimension;x++)
-      for (var y = 0; y < dimension;y++)  
-        if (newBoard[x][y].offset === offset)
-          newBoard[x][y].player = player
-    return newBoard
+    }
+    return possibleMoves
+
   }
   getAvaliableMoves(boardMatrix) {
     const avaliableOffsets = []
-    for (var x = 0; x < dimension;x++) {
-      for (var y = 0; y < dimension;y++) {
-        const section = boardMatrix[x][y]      
+    for (var i = 0; i < dimension * dimension; i++) {
+      const section = boardMatrix[i]      
         if (section.player === 0)
-          avaliableOffsets.push(section.offset)
-      }
+          avaliableOffsets.push(i)
     }
     return avaliableOffsets;
   }
   
-  // just a helper function showing
-  // the board with only what players pieces
-  // that are played
-  showPlayers(board) {
-    return board.map(function(row) {
-      return row.map(function(section) {
-        return section.player
-      })
-    })
-  }
-  getInfoByOffset(offset) {
-    for (var x = 0; x < dimension;x++)
-      for (var y = 0; y < dimension;y++)   
-        if (boardMatrix[x][y].offset === offset)
-          return boardMatrix[x][y]
-  }
 }
 
 class Canvas {
-  constructor(context, board) {
+  constructor(context, board = new Board()) {
     this.context = context
-    this.board = board || new Board()
+    this.board = board
     this.updateBoard()
-
     this.engine = new Engine(player)
     // first - 500
+    // second - 390
     canvas.addEventListener('mouseup', (event) => {
       const canvasMousePosition = this.getCanvasMousePosition(event);
       this.addPlayingPiece(canvasMousePosition, player);
-      var x = Date.now()
-      this.board = this.engine.move(this.board)
-      this.updateBoard()
+      if (Canvas.checkWin(this.board, true) === 3) return
+      var x = Date.now()   
+      this.board[this.engine.move(this.board)].player = this.engine.player
       var y = Date.now()
+      this.updateBoard()
       document.getElementById('winner').innerText = y - x
     });
 
@@ -242,20 +251,20 @@ class Canvas {
     var xCordinate;
     var yCordinate;
     var playerGo;
-    for (var x = 0; x < dimension; x++) {
-      for (var y = 0; y < dimension; y++) {
-        xCordinate = this.board[x][y].x;
-        yCordinate = this.board[x][y].y;
-        playerGo = this.board[x][y].player
 
-        if (playerGo === 1)
-          this.drawX(xCordinate, yCordinate);
+    for (var i = 0; i < this.board.length; i++) {
+      const data = this.board[i]
+      xCordinate = data.x;
+      yCordinate = data.y;
+      playerGo = data.player
+      if (playerGo === 1) {
+        this.drawX(xCordinate, yCordinate);
+      }
 
-        if (playerGo === 2)
-          this.drawO(xCordinate, yCordinate)
+      if (playerGo === 2) {
+        this.drawO(xCordinate, yCordinate)
       }
     }
-    Canvas.checkWin(this.board, true)
   }
   drawLines(lineWidth, strokeStyle) {
     const lineStart = 4;
@@ -291,19 +300,18 @@ class Canvas {
   addPlayingPiece(mouse, player) {
     var xCordinate;
     var yCordinate;
-    for (var x = 0;x < dimension;x++) {
-      for (var y = 0;y < dimension;y++) {
-        var data = this.board[x][y]
-        xCordinate = data.x;
-        yCordinate = data.y;
 
-        // if coords fall into a sector update the player
-        if (
-            mouse.x >= xCordinate && mouse.x <= xCordinate + sectionSize &&
-            mouse.y >= yCordinate && mouse.y <= yCordinate + sectionSize
-          ) {
-            data.player = player
-        }
+    for (var i = 0;i < this.board.length;i++) {
+      const data = this.board[i]
+      xCordinate = data.x;
+      yCordinate = data.y;
+
+      // if coords fall into a sector update the player
+      if (
+          mouse.x >= xCordinate && mouse.x <= xCordinate + sectionSize &&
+          mouse.y >= yCordinate && mouse.y <= yCordinate + sectionSize
+        ) {
+          data.player = player
       }
     }
     this.updateBoard()
@@ -343,141 +351,32 @@ class Canvas {
       y: event.clientY - rect.top
     }
   }
-  static checkWin(arr, final = false) {
-    var winMatrix = getWinningCombinations(arr)
-    winComb:
-    for (var i = 0; i < winMatrix.length; i++) {
-      var startingValue = winMatrix[i][0].player
-      for (var j = 0; j < winMatrix[i].length; j++) {
-        if (winMatrix[i][j].player === 0) continue winComb
-        if (winMatrix[i][j].player !== startingValue) continue winComb
+  // doesnt work with engine
+  // 3 = draw
+  // 0 = no winner
+  static checkWin(board, final = false) {
+    var isDraw = true
+    for (var i = 0; i < winningCombo.length; i++) {
+      const combo = winningCombo[i]
+      var firstSection = board[combo[0]].player
+      var winner = true
+      for (var j = 0; j < combo.length; j++) {
+        const player = board[combo[j]].player
+        if (player === 0) isDraw = false
+        if (firstSection !== player) winner = false
       }
-      if (final) document.getElementById('winner').innerText = (startingValue === 1 ? 'X' : 'O') + ' wins'
-      return startingValue
-    } 
-    if (checkDraw(arr)) {
-      if (final) document.getElementById('winner').innerText = 'draw'
+      if (winner && firstSection) {
+        if (final)
+          document.getElementById('winner').innerText = firstSection + ' wins'
+        return firstSection
+      }
+    }
+    if (isDraw) {
+      if (final)
+        document.getElementById('winner').innerText = 'draw'
       return 3
     }
-    return 0
+    return 0   
   }
-
 }
-
-function checkDraw(boardMatrix) {
-  var isDraw = true
-  for (var x = 0; x < dimension;x++) {
-    for (var y = 0; y < dimension;y++) {
-        const section = boardMatrix[x][y]      
-        if (section.player === 0) {
-          isDraw = false
-        }
-    }
-  }
-  return isDraw;
-}
-
-function getWinningCombinations(matrix) {
-    var winningCombinations = []
-    var boardMatrix = matrix
-
-
-    var tempArrH = []
-    for (var i = 0; i < dimension; i++) {
-      tempArrH.push(dimension[i])
-      if (i % dimension === 0) {
-        winningCombinations.push(tempArrH)
-        tempArrH = []
-      }
-    }
-
-
-    /*
-      * all horizontal 
-    */
-    var tempArrH = []
-    for (var x = 0; x < dimension; x *= 3) {
-        tempArrH.push(boardMatrix[x])
-    }
-    winningCombinations.push(tempArrH)
-
-    /*
-      * all vertical
-    */
-    // all verticals that are possible
-      // for each vertical
-      for (var i = 0; i < dimension; i++) {
-        var tempArrV = []
-        for (var j = 0; j < dimension; j++) {
-          tempArrV.push(boardMatrix[j][i])
-        }
-        winningCombinations.push(tempArrV)
-      }
-
-    /*
-      * all diagonal 
-    */
-
-    // Top Left to Bottom Right
-    var TLBR = dimension + 1
-    var TLBRstart = 0
-    var TLBRarr = []
-
-    // Top Right to Bottom Left
-    var TRBL = dimension - 1
-    var TRBLstart = dimension - 1
-    var TRBLarr = []
-
-    for (var x = 0, offset = 0; x < dimension; x++) {
-      for (var y = 0; y < dimension; y++, offset++) {
-        // if it matches a TLBR sector
-        if (offset === TLBRstart) {
-            var data = boardMatrix[x][y]
-            TLBRarr.push(data)
-            TLBRstart += TLBR
-        }
-        // if it matches a TRBL sector
-        if (offset === TRBLstart) {
-          var data = boardMatrix[x][y]
-          TRBLarr.push(data)
-          TRBLstart += TRBL
-        }
-      }
-    }
-    //with the TRBL diagonal the very last section of the matrix is
-    //added when it does not fall in the TRBL diagonal line
-    TRBLarr.pop()
-
-    winningCombinations.push(TLBRarr)
-    winningCombinations.push(TRBLarr)
-    
-    return winningCombinations
-}
-
-var testboard = []
-
-var winningCombo = []
-
-var tempArrH = []
-
-// get winning combos
-for (var i = 0, colomn = 0, row = 0; i < dimension * dimension; i++) {
-  if (i % 3 === 0) {
-    if (i !== 0) {
-      winningCombo.push(tempArrH)
-      tempArrH = []
-    }
-    row = 0
-    colomn = sectionSize * (i / dimension)
-  }
-  testboard[i] = {
-    x: row++ * sectionSize,
-    y: colomn,
-    player: 0,
-    offset: i
-  }
-  tempArrH.push(testboard[i])
-  if (i === (dimension * dimension) - 1) winningCombo.push(tempArrH)
-}
-console.log(testboard)
-console.log(winningCombo)
+new Canvas(context, new Board())
