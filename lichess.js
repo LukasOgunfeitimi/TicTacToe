@@ -7,6 +7,7 @@
 // @run-at document-start
 // @grant        none
 // ==/UserScript==
+alert(32432)
 var red = '#D2042D'
 var defaultColour = '#15781B'
 if (location.pathname === '/') {
